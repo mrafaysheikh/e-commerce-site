@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkout | NOTED2SELF.</title>
+<link rel="icon" href="images/logo/logo-mark.png">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .checkout-wrap{max-width:1000px;margin:0 auto;padding:40px 24px;display:grid;grid-template-columns:1.2fr 1fr;gap:32px}
+  .checkout-wrap h1{letter-spacing:1px;margin-bottom:20px;grid-column:1/-1}
+  .checkout-wrap h3{margin:20px 0 12px;letter-spacing:1px;font-size:16px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:12px;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase}
+  .field input,.field select{width:100%;padding:12px;border:1px solid var(--line);font-size:15px}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .pay-methods{display:flex;gap:10px;flex-wrap:wrap}
+  .pay-methods label{border:1px solid var(--line);padding:12px 18px;cursor:pointer;font-size:14px}
+  .pay-methods input{margin-right:8px}
+  .summary{border:1px solid var(--line);padding:22px;height:fit-content}
+  .summary-item{display:flex;justify-content:space-between;font-size:14px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .summary-total{display:flex;justify-content:space-between;font-size:18px;font-weight:700;padding:14px 0}
+  .checkout-msg{margin-top:14px;font-size:14px}
+  .checkout-msg.error{color:var(--sale)}
+  .checkout-msg.success{color:green}
+  .secure-note{font-size:13px;color:var(--muted);margin-top:12px}
+  @media (max-width:800px){.checkout-wrap{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="announcement">FREE WORLDWIDE SHIPPING ON ORDERS OVER $150 &nbsp;|&nbsp; EASY 30-DAY RETURNS</div>
+<header class="header">
+  <a href="index.html" class="logo"><img src="images/logo/logo-wordmark.png" alt="NOTED2SELF. logo"></a>
+  <nav class="nav"><a href="index.html">Home</a><a href="index.html#shop">Shop</a><a href="track.html">Track Order</a></nav>
+  <div class="header-icons"><a href="index.html" class="btn btn-light btn-small">BACK TO STORE</a></div>
+</header>
+
+<main class="checkout-wrap">
+  <h1>CHECKOUT</h1>
+
+  <form id="checkoutForm">
+    <h3>CONTACT &amp; SHIPPING</h3>
+    <div class="field"><label>Full name</label><input type="text" id="fName" required></div>
+    <div class="field"><label>Email</label><input type="email" id="fEmail" required></div>
+    <div class="field"><label>Phone</label><input type="tel" id="fPhone" required></div>
+    <div class="field"><label>Address</label><input type="text" id="fAddress" required></div>
+    <div class="field-row">
+      <div class="field"><label>City</label><input type="text" id="fCity" required></div>
+      <div class="field"><label>Postal code</label><input type="text" id="fPostal"></div>
+    </div>
+    <div class="field"><label>Country</label>
+      <select id="fCountry" required>
+        <option value="">Select country</option>
+        <option>United States</option><option>United Kingdom</option><option>Canada</option>
+        <option>United Arab Emirates</option><option>Saudi Arabia</option><option>Australia</option>
+        <option>Germany</option><option>France</option><option>India</option><option>Pakistan</option>
+        <option>Other</option>
+      </select>
+    </div>
+
+    <h3>PAYMENT</h3>
+    <div class="pay-methods">
+      <label><input type="radio" name="pay" value="card" checked> Card (Visa, Mastercard, Amex)</label>
+      <label><input type="radio" name="pay" value="paypal"> PayPal</label>
+    </div>
+    <p class="secure-note">You will be taken to the secure payment page. We never see or store your card details.</p>
+
+    <button type="submit" class="btn btn-dark btn-full" id="placeBtn">PLACE ORDER</button>
+    <p class="checkout-msg" id="checkoutMsg"></p>
+  </form>
+
+  <aside class="summary">
+    <h3>ORDER SUMMARY</h3>
+    <div id="summaryItems"></div>
+    <div class="summary-total"><span>Total</span><span id="summaryTotal">$0</span></div>
+    <p class="secure-note">Free worldwide shipping on orders over $150. Duties and taxes, if any, are calculated at checkout by the payment provider.</p>
+  </aside>
+</main>
+
+<script>
+const API_BASE = (localStorage.getItem("yb_api") || "http://localhost:5000").replace(/\/$/, "");
+const money = n => "$" + Number(n).toLocaleString("en-US");
+let cart = JSON.parse(localStorage.getItem("yb_cart") || "[]");
+
+const summaryItems = document.getElementById("summaryItems");
+const summaryTotal = document.getElementById("summaryTotal");
+if (!cart.length) {
+  summaryItems.innerHTML = `<p>Your cart is empty. <a href="index.html#shop">Go shopping</a>.</p>`;
+} else {
+  summaryItems.innerHTML = cart.map(i =>
+    `<div class="summary-item"><span>${i.name} (Size ${i.size}) x ${i.qty}</span><span>${money(i.price * i.qty)}</span></div>`).join("");
+  summaryTotal.textContent = money(cart.reduce((s, i) => s + i.price * i.qty, 0));
+}
+
+document.getElementById("checkoutForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("checkoutMsg");
+  const btn = document.getElementById("placeBtn");
+  if (!cart.length) { msg.textContent = "Your cart is empty."; msg.className = "checkout-msg error"; return; }
+  btn.disabled = true; btn.textContent = "PLACING ORDER...";
+  msg.textContent = ""; msg.className = "checkout-msg";
+  const payMethod = document.querySelector('input[name="pay"]:checked').value;
+  try {
+    const orderRes = await fetch(`${API_BASE}/api/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customer: {
+          name: document.getElementById("fName").value.trim(),
+          email: document.getElementById("fEmail").value.trim(),
+          phone: document.getElementById("fPhone").value.trim(),
+          address: document.getElementById("fAddress").value.trim(),
+          city: document.getElementById("fCity").value.trim(),
+          country: document.getElementById("fCountry").value,
+          postalCode: document.getElementById("fPostal").value.trim(),
+        },
+        items: cart.map(i => ({ productId: i.productId, qty: i.qty, size: i.size })),
+        paymentMethod: "gateway",
+        paymentGateway: payMethod,
+      }),
+    });
+    const order = await orderRes.json();
+    if (!orderRes.ok) throw new Error(order.error || "Could not create order");
+
+    // Hand off to the payment adapter (mock until a real gateway is connected).
+    const payRes = await fetch(`${API_BASE}/api/payments/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: order.orderId }),
+    });
+    const pay = await payRes.json();
+    if (pay.checkoutUrl) { window.location.href = pay.checkoutUrl; return; }
+
+    localStorage.setItem("yb_cart", "[]");
+    cart = [];
+    msg.className = "checkout-msg success";
+    msg.innerHTML = `Order placed! Your order ID is <strong>${order.orderId}</strong>. ` +
+      `Payment is currently in test mode (gateway not connected yet). ` +
+      `<a href="track.html">Track your order here</a>.`;
+    btn.textContent = "ORDER PLACED";
+  } catch (err) {
+    msg.className = "checkout-msg error";
+    msg.textContent = "Could not place the order: " + err.message +
+      " If the store backend is not running, start it with: cd backend && npm start (after setting up .env).";
+    btn.disabled = false; btn.textContent = "PLACE ORDER";
+  }
+});
+</script>
+</body>
+</html>

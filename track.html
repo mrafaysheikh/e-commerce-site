@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Track Your Order | NOTED2SELF.</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .track-wrap{max-width:640px;margin:0 auto;padding:48px 24px}
+  .track-form{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}
+  .track-form input{flex:1;min-width:180px;padding:13px 16px;border:1px solid var(--line);font-size:15px}
+  .timeline{display:flex;justify-content:space-between;margin:28px 0 8px;position:relative}
+  .timeline::before{content:"";position:absolute;top:14px;left:0;right:0;height:2px;background:var(--line);z-index:0}
+  .step{position:relative;z-index:1;text-align:center;font-size:12px;letter-spacing:1px;background:#fff;padding:0 6px}
+  .step .dot{width:30px;height:30px;border-radius:50%;background:#ddd;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:14px}
+  .step.done .dot{background:var(--ink);color:#fff}
+  .step.cancelled .dot{background:var(--sale);color:#fff}
+  .order-box{border:1px solid var(--line);padding:20px;margin-top:16px}
+  .order-box h3{margin-bottom:10px}
+  .order-box p{font-size:14px;color:var(--muted);margin-bottom:4px}
+  .order-item{display:flex;justify-content:space-between;font-size:15px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .track-msg{margin-top:12px;font-size:14px}
+  .track-msg.error{color:var(--sale)}
+  .api-row{margin-top:24px;font-size:13px;color:var(--muted)}
+  .api-row input{padding:8px 10px;border:1px solid var(--line);width:280px;max-width:100%}
+</style>
+</head>
+<body>
+<div class="announcement">FREE WORLDWIDE SHIPPING ON ORDERS OVER $150</div>
+<header class="header">
+  <a href="index.html" class="logo"><img src="images/logo/logo-wordmark.png" alt="NOTED2SELF. logo"></a>
+  <nav class="nav" id="nav"><a href="index.html">Home</a><a href="index.html#shop">Shop</a></nav>
+  <div class="header-icons"><a href="index.html" class="btn btn-light btn-small">BACK TO STORE</a></div>
+</header>
+
+<main class="track-wrap">
+  <h1 style="letter-spacing:1px">TRACK YOUR ORDER</h1>
+  <p style="color:var(--muted)">Enter your order ID and the phone number used at checkout.</p>
+  <form class="track-form" id="trackForm">
+    <input type="text" id="orderId" placeholder="Order ID (e.g. YB-123456)" required>
+    <input type="tel" id="phone" placeholder="Phone number" required>
+    <button type="submit" class="btn btn-dark">TRACK</button>
+  </form>
+  <p class="track-msg" id="trackMsg"></p>
+  <div id="result" style="display:none">
+    <div class="timeline" id="timeline"></div>
+    <div class="order-box" id="orderBox"></div>
+  </div>
+  <div class="api-row">
+    API URL: <input type="text" id="apiUrl" value="">
+    <p>Default is http://localhost:5000. On the live site this points to your backend host.</p>
+  </div>
+</main>
+
+<script>
+const apiInput = document.getElementById("apiUrl");
+apiInput.value = localStorage.getItem("yb_api") || "http://localhost:5000";
+apiInput.addEventListener("change", () => localStorage.setItem("yb_api", apiInput.value.trim()));
+const money = n => "$" + Number(n).toLocaleString("en-US");
+const STEPS = ["placed", "confirmed", "shipped", "delivered"];
+const LABELS = { placed: "Placed", confirmed: "Confirmed", shipped: "Shipped", delivered: "Delivered" };
+
+document.getElementById("trackForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const orderId = document.getElementById("orderId").value.trim();
+  const phone = document.getElementById("phone").value.trim();
+  const msg = document.getElementById("trackMsg");
+  const result = document.getElementById("result");
+  msg.textContent = "Looking up your order..."; msg.className = "track-msg"; result.style.display = "none";
+  try {
+    const res = await fetch(`${apiInput.value.replace(/\/$/, "")}/api/orders/${encodeURIComponent(orderId)}?phone=${encodeURIComponent(phone)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Order not found");
+    msg.textContent = "";
+    const idx = STEPS.indexOf(data.status);
+    document.getElementById("timeline").innerHTML = data.status === "cancelled"
+      ? `<div class="step cancelled"><div class="dot">x</div>Cancelled</div>`
+      : STEPS.map((s, i) => `<div class="step ${i <= idx ? "done" : ""}"><div class="dot">${i <= idx ? "✓" : i + 1}</div>${LABELS[s]}</div>`).join("");
+    document.getElementById("orderBox").innerHTML =
+      `<h3>Order ${data.orderId}</h3>
+       <p>Placed: ${new Date(data.createdAt).toLocaleString()}</p>
+       <p>Deliver to: ${data.customer.name}, ${data.customer.city}</p>
+       <p>Payment: ${data.payment.method.toUpperCase()} - ${data.payment.status}</p>` +
+      data.items.map(i => `<div class="order-item"><span>${i.name} (Size ${i.size}) x ${i.qty}</span><span>${money(i.price * i.qty)}</span></div>`).join("") +
+      `<div class="order-item"><strong>Total</strong><strong>${money(data.total)}</strong></div>`;
+    result.style.display = "block";
+  } catch (err) {
+    msg.textContent = err.message; msg.className = "track-msg error";
+  }
+});
+</script>
+</body>
+</html>
